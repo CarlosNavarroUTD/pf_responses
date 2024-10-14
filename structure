@@ -38,13 +38,7 @@ Responses/
 │  │   │   └── index.html
 │  │   ├── src/
 │  │   │   ├── components/
-               ├── ui/
-               │   ├── button.js
-               │   ├── input.js
-               │   ├── scroll-area.js
-               │   └── popover.js
-│  │   │   │   ├── LoginForm.js
-│  │   │   │   └── MessageInterface.js
+│  │   │   │   └── LoginForm.js
 │  │   │   ├── App.js
 │  │   │   └── index.js
 │  │   ├── package.json
