@@ -16,16 +16,24 @@ class RespuestaSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Respuesta
-        fields = ['id', 'contenido', 'fecha_creacion', 'usuario', 'tags', 'tags_list']
+        fields = ['id', 'contenido', 'fecha_creacion', 'usuario', 'tags', 'tags_list', 'order']
         read_only_fields = ['fecha_creacion', 'usuario']
 
     def create(self, validated_data):
         tags_data = validated_data.pop('tags_list', [])
+        # Si no se proporciona un orden, usar el último + 1
+        if 'order' not in validated_data:
+            last_order = Respuesta.objects.filter(
+                usuario=self.context['request'].user
+            ).aggregate(Max('order'))['order__max']
+            validated_data['order'] = (last_order or -1) + 1
+        
         respuesta = Respuesta.objects.create(**validated_data)
         for tag_name in tags_data:
             tag, _ = Tag.objects.get_or_create(nombre=tag_name)
             respuesta.tags.add(tag)
         return respuesta
+
 
     def update(self, instance, validated_data):
         tags_data = validated_data.pop('tags_list', None)

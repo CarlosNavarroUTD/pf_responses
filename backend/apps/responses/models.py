@@ -22,11 +22,12 @@ class Respuesta(models.Model):
     fecha_creacion = models.DateTimeField(auto_now_add=True)
     usuario = models.ForeignKey(Usuario, on_delete=models.CASCADE, related_name='respuestas')
     tags = models.ManyToManyField(Tag, through='RespuestaTag', related_name='respuestas')
+    order = models.IntegerField(default=0)  # Nuevo campo para el orden
 
     class Meta:
         verbose_name = 'Respuesta'
         verbose_name_plural = 'Respuestas'
-        ordering = ['-fecha_creacion']
+        ordering = ['order']  # Cambiado de fecha_creacion a order
 
     def __str__(self):
         return f"{self.contenido[:50]}..." if len(self.contenido) > 50 else self.contenido
@@ -34,7 +35,7 @@ class Respuesta(models.Model):
     @property
     def tags_list(self):
         return list(self.tags.values_list('nombre', flat=True))
-
+    
 class RespuestaTag(models.Model):
     respuesta = models.ForeignKey(Respuesta, on_delete=models.CASCADE)
     tag = models.ForeignKey(Tag, on_delete=models.CASCADE)

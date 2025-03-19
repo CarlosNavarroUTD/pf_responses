@@ -18,10 +18,10 @@ class RespuestaViewSet(viewsets.ModelViewSet):
     filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
     filterset_fields = ['tags__nombre']
     search_fields = ['contenido']
-    ordering_fields = ['fecha_creacion']
+    ordering_fields = ['fecha_creacion', 'order']  # Agregado 'order'
 
     def get_queryset(self):
-        return Respuesta.objects.filter(usuario=self.request.user)
+        return Respuesta.objects.filter(usuario=self.request.user).order_by('order')
 
     def perform_create(self, serializer):
         serializer.save(usuario=self.request.user)

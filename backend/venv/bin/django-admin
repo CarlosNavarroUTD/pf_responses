@@ -1,4 +1,4 @@
-#!/home/carlosn/proyectos/pf_responses/backend/venv/bin/python
+#!/home/carlos/projects/pf_responses/backend/venv/bin/python
 # -*- coding: utf-8 -*-
 import re
 import sys

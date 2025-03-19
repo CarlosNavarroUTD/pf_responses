@@ -1,188 +1,201 @@
-// frontend/src/components/MessageBoard.jsx
-import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import MessageList from './MessageList';
-import TagList from './TagList';
-import Modal from './Modal';
-import AddMessageForm from './AddMessageForm';
-import IconPicker from './IconPicker';
+import React, { useState, useEffect, useRef } from 'react';
+import { Card } from './ui/card';
 
-function MessageBoard() {
-  const [showAddMessageModal, setShowAddMessageModal] = useState(false);
+const MessageItem = ({ 
+  message, 
+  onEditMessage, 
+  onDeleteMessage, 
+  onCreateNewMessage,
+  isLast
+}) => {
+  const [content, setContent] = useState(message.contenido);
+  const [isEditing, setIsEditing] = useState(false);
+  const inputRef = useRef(null);
+
+  useEffect(() => {
+    if (isEditing && inputRef.current) {
+      inputRef.current.focus();
+    }
+  }, [isEditing]);
+
+  const handleKeyDown = async (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      if (content.trim() !== message.contenido) {
+        await onEditMessage(message.id, content);
+      }
+      onCreateNewMessage(message.order + 1);
+    } else if (e.key === 'Backspace' && content === '') {
+      e.preventDefault();
+      await onDeleteMessage(message.id);
+    }
+  };
+
+  return (
+    <div 
+      className="group min-h-[24px] px-2 hover:bg-gray-50 flex items-center"
+      onClick={() => setIsEditing(true)}
+    >
+      <input
+        ref={inputRef}
+        type="text"
+        value={content}
+        onChange={(e) => setContent(e.target.value)}
+        onKeyDown={handleKeyDown}
+        onBlur={() => {
+          if (content.trim() !== message.contenido) {
+            onEditMessage(message.id, content);
+          }
+          setIsEditing(false);
+        }}
+        className="w-full bg-transparent outline-none py-1"
+        placeholder={isLast ? "Press Enter to add a new line..." : "Type something..."}
+      />
+    </div>
+  );
+};
+
+const MessageBoard = () => {
   const [messages, setMessages] = useState([]);
-  const [tags, setTags] = useState([]);
-  const navigate = useNavigate();
+  const token = localStorage.getItem('token');
 
   useEffect(() => {
     fetchMessages();
-    fetchTags();
   }, []);
 
-  const handleTokenExpiration = () => {
-    localStorage.removeItem('token');
-    navigate('/login');
-  };
-  
   const fetchMessages = async () => {
     try {
-      const token = localStorage.getItem('token');
       const response = await fetch('http://127.0.0.1:8000/api/respuestas/', {
         headers: {
           'Authorization': `Bearer ${token}`
         }
       });
-      if (response.status === 401) {
-        handleTokenExpiration();
-        return;
-      }
       if (!response.ok) throw new Error('Failed to fetch messages');
       const data = await response.json();
-      setMessages(data);
+      // Asegurarse de que los mensajes tengan un orden
+      const orderedData = data.map((msg, index) => ({
+        ...msg,
+        order: msg.order || index
+      })).sort((a, b) => a.order - b.order);
+      setMessages(orderedData);
     } catch (error) {
       console.error('Error fetching messages:', error);
-      alert('Failed to fetch messages. Please try again.');
-    }
-  };
-  
-  const fetchTags = async () => {
-    try {
-      const token = localStorage.getItem('token');
-      const response = await fetch('http://127.0.0.1:8000/api/tags/', {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
-      if (response.status === 401) {
-        handleTokenExpiration();
-        return;
-      }
-      if (!response.ok) throw new Error('Failed to fetch tags');
-      const data = await response.json();
-      setTags(data);
-    } catch (error) {
-      console.error('Error fetching tags:', error);
-      alert('Failed to fetch tags. Please try again.');
     }
   };
 
-  const handleAddTag = async (messageId, newTag) => {
+  const handleAddMessage = async (content, order) => {
     try {
-      const message = messages.find(m => m.id === messageId);
-      const response = await fetch(`http://127.0.0.1:8000/api/respuestas/${messageId}/`, {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        },
-        body: JSON.stringify({ tags_list: [...(message.tags || []), newTag] })
-      });
-      if (response.status === 401) {
-        handleTokenExpiration();
-        return;
-      }
-      if (!response.ok) throw new Error('Failed to add tag');
-      await fetchMessages();
-      alert('Tag added successfully.'); 
-    } catch (error) {
-      console.error('Error adding tag:', error);
-      alert('Failed to add tag. Please try again.');
-    }
-  };
-  const handleAddMessage = async (newMessage) => {
-    try {
+      // Primero, actualizar los órdenes de los mensajes existentes
+      const updatesPromises = messages
+        .filter(msg => msg.order >= order)
+        .map(msg => 
+          fetch(`http://127.0.0.1:8000/api/respuestas/${msg.id}/`, {
+            method: 'PATCH',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({ order: msg.order + 1 })
+          })
+        );
+
+      await Promise.all(updatesPromises);
+
+      // Luego, crear el nuevo mensaje
       const response = await fetch('http://127.0.0.1:8000/api/respuestas/', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
+          'Authorization': `Bearer ${token}`
         },
         body: JSON.stringify({
-          contenido: newMessage, 
-          tags_list: []  // Puedes enviar un array vacío si no hay tags.
+          contenido: content || '',
+          tags_list: [],
+          order: order
         })
       });
-      if (response.status === 401) {
-        handleTokenExpiration();
-        return;
-      }
+
       if (!response.ok) throw new Error('Failed to add message');
       await fetchMessages();
-      alert('Message added successfully.');
     } catch (error) {
       console.error('Error adding message:', error);
-      alert('Failed to add message. Please try again.');
     }
   };
-  
+
   const handleEditMessage = async (messageId, newContent) => {
     try {
       const response = await fetch(`http://127.0.0.1:8000/api/respuestas/${messageId}/`, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
+          'Authorization': `Bearer ${token}`
         },
         body: JSON.stringify({ contenido: newContent })
       });
-      if (response.status === 401) {
-        handleTokenExpiration();
-        return;
-      }
       if (!response.ok) throw new Error('Failed to edit message');
       await fetchMessages();
-      alert('Message edited successfully.');
     } catch (error) {
       console.error('Error editing message:', error);
-      alert('Failed to edit message. Please try again.');
     }
   };
 
   const handleDeleteMessage = async (messageId) => {
     try {
+      // Obtener el mensaje que se va a eliminar
+      const messageToDelete = messages.find(m => m.id === messageId);
+      if (!messageToDelete) return;
+
+      // Primero actualizar los órdenes de los mensajes posteriores
+      const updatesPromises = messages
+        .filter(msg => msg.order > messageToDelete.order)
+        .map(msg =>
+          fetch(`http://127.0.0.1:8000/api/respuestas/${msg.id}/`, {
+            method: 'PATCH',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({ order: msg.order - 1 })
+          })
+        );
+
+      await Promise.all(updatesPromises);
+
+      // Luego eliminar el mensaje
       const response = await fetch(`http://127.0.0.1:8000/api/respuestas/${messageId}/`, {
         method: 'DELETE',
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
+          'Authorization': `Bearer ${token}`
         }
       });
-      if (response.status === 401) {
-        handleTokenExpiration();
-        return;
-      }
+
       if (!response.ok) throw new Error('Failed to delete message');
       await fetchMessages();
-      alert('Message deleted successfully.');
     } catch (error) {
       console.error('Error deleting message:', error);
-      alert('Failed to delete message. Please try again.');
     }
   };
 
-  return (
-<div className="relative flex h-screen bg-gray-100">
-  <button 
-    onClick={() => setShowAddMessageModal(true)} 
-    className="absolute top-4 right-4 p-2 bg-green-500 text-white rounded-lg mb-4">
-    Add Message
-  </button>
-  
-  {showAddMessageModal && (
-    <Modal onClose={() => setShowAddMessageModal(false)}>
-      <AddMessageForm onAddMessage={handleAddMessage} />
-    </Modal>
-  )}
-  <IconPicker/>
-  <TagList tags={tags} />
-  <MessageList 
-    messages={messages} 
-    tags={tags}
-    onAddTag={handleAddTag}
-    onEditMessage={handleEditMessage}
-    onDeleteMessage={handleDeleteMessage}
-  />
-</div>
+  const createNewMessage = (order) => {
+    handleAddMessage('', order);
+  };
 
+  return (
+    <Card className="flex flex-col h-screen bg-gray-50 overflow-hidden">
+      <div className="flex-1 overflow-y-auto p-4 space-y-0">
+        {messages.map((message, index) => (
+          <MessageItem
+            key={message.id}
+            message={message}
+            onEditMessage={handleEditMessage}
+            onDeleteMessage={handleDeleteMessage}
+            onCreateNewMessage={createNewMessage}
+            isLast={index === messages.length - 1}
+          />
+        ))}
+      </div>
+    </Card>
   );
-}
+};
 
 export default MessageBoard;
